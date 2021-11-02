@@ -1,7 +1,6 @@
 rm(list=ls())
 setwd("inat_analysis")
 library(tidyverse)
-library(caper) #for calculating d-statistic from Fritz and Purvis 2009
 library(furrr)
 library(phylolm)
 library(lme4)
