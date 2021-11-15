@@ -22,17 +22,17 @@ scenario3 = angio_tree$scenario.3
 scenario3$node.label<-NULL
 new_tree=keep.tip(scenario3,gsub(" ","_",new_df$species_underscore))
 
-#simulate data for running the blinded analysis 
-sim_dat = data.frame(Y = array(0, dim = length(new_tree$tip.label)), X = new_df$abund_scaled, 
-                     row.names = new_tree$tip.label)
-beta0= -2.95  
-beta1 = 0.3
-beta_matrix=matrix(c(beta0,beta1),nrow=2)
-set.seed(457)
-a=binaryPGLMM.sim(Y~X, data = sim_dat, phy=new_tree,s2=.5, nrep = 1,
-                  B=beta_matrix)
-
-y_val=a$Y
+#simulate data for running the blinded analysis
+my_X=cbind(rep(1,nrow(new_df)),new_df$abund_scaled)
+row.names(my_X)=sub(" ","_",new_df$species_underscore)
+use_me=read_csv("rbintrait_model_coefficients.csv") %>% 
+    filter(focal_alpha)
+beta1=0.3
+(phylo_sig=unique(use_me$alpha)[2])
+beta0=use_me[use_me$alpha==phylo_sig & use_me$beta1==beta1,]$beta0
+set.seed(56)#Set seed
+ys=rbinTrait(n=1,phy=new_tree,beta=c(beta0,beta1),alpha=phylo_sig, X=my_X)
+y_val=as.vector(ys)
 new_df$blind_y=y_val
 with(new_df,boxplot(abund_scaled~blind_y))
 table(new_df$category)
@@ -56,7 +56,7 @@ focal_genera=c(sisters$focal_genus,sisters$sister_genus)
 
 #format the data for the paired analysis
 paired_genera=new_df %>% 
-    filter(genus %in% focal_genera & !family %in% focal_fams) %>% 
+    filter(genus %in% focal_genera) %>%  
     dplyr::select(genus,family,category,pollination,effort_corrected_abund,raw_abund) %>%
     mutate(plant_name=genus,rank='genus')
 paired_df=paired_genera  %>% 
@@ -109,9 +109,6 @@ print(paste0('Plants hosting specialist bees were, on average, ', abs(round(mean
 wilcox.test(Pair(specialist_host, control) ~ 1, ,alternative='greater',data = pairs_wide)
 
 #make the figure
-#option 1) a boxplot or histogram 
-boxplot(df_differences$diff)
-hist(df_differences$diff)
 paired_df_blinded=paired_df %>% mutate(abund_log10=log10(effort_corrected_abund))
 
 #make transparent color for figure
@@ -136,13 +133,10 @@ with(paired_df_blinded,boxplot(abund_log10~category_rand,boxwex=c(.35,.35),
 # dev.off()
 
 
-
 #run all angiosperm analysis on blinded data
 obs_mod=phyloglm(blind_y~abund_scaled,phy=new_tree,data=new_df,btol=40,method = c("logistic_MPLE"))
 summary(obs_mod)
 obs_beta=coef(obs_mod)[2]
-
-# calculate the power of the model and analysis method - see 'calculate power' r script
 
 # run permutations to assess the significance of model coefficients
 n_perm=999
@@ -154,7 +148,7 @@ permut_output=1:n_perm %>% future_map(possibly(function(i){
     converged=mod$convergence==0
     # 
     tibble(null_beta=null_beta,converged=converged)
-},otherwise=NULL),.options=furrr_options(seed=T)) %>% bind_rows
+},otherwise=NULL),.options=furrr_options(seed=88)) %>% bind_rows
 
 # check whether number of permutations =n_perm
 # if not, do more permtuations in units of 10
@@ -167,14 +161,14 @@ while(sum(permut_output$converged)<n_perm){
         converged=mod$convergence==0
         # 
         tibble(null_beta=null_beta,converged=converged)
-    },otherwise=NULL),.options=furrr_options(seed=T)) %>% bind_rows
+    },otherwise=NULL),.options=furrr_options(seed=765)) %>% bind_rows
     permut_output=permut_output %>% bind_rows(add_me)
 }
 
 #calculate pval from permutations
 null_betas=as.vector(permut_output$null_beta[1:n_perm])
 r=sum(null_betas>obs_beta)
-pval=(r+1)/(n_perm+1)
+(pval=(r+1)/(n_perm+1))
 
 #now plot the model prediction and results
 # get probabilities from the model coefficients
@@ -189,10 +183,10 @@ percent_decrease=round((max(prob_host)-min(prob_host))/max(prob_host)*100,1)
 
 if(obs_beta>0){
     print(paste0('The least abundant angiosperm in our data had an ',round(min(prob_host)*100),'% chance of hosting pollen specialist bee species, whereas the most abundant angiosperm in our data had an ', round(max(prob_host)*100),'% chance.'))
-}
+    }
 if(obs_beta<0){
     print(paste0('The least abundant angiosperm in our data had an ',round(max(prob_host)*100),'% chance of hosting pollen specialist bee species, whereas the most abundant angiosperm in our data had an ', round(min(prob_host)*100),'% chance.'))
-}
+    }
 
 # pdf('phyloglm_results_blinded.pdf',width=8)
 par(cex.lab=1.8,cex.axis=1.5,mar=c(4.8,5.1,3.1,2.1))
