@@ -183,50 +183,6 @@ lines(abund_ordered,prob_host,type = "l",lwd=3)
 with(new_df,points(abund_scaled,category_binary,pch="|",cex=.6))
 # dev.off()
 
-densities_df=new_df %>% split(.$category_binary) %>% map_dfr(function(df){
-    dens=hist(df$abund_scaled,plot=F,breaks=my_breaks)
-    percent_dens=  dens$density/sum(dens$density)
-    
-    
-    data.frame(abund_scaled=dens$mid,percent_dens=percent_dens) %>% 
-        mutate(category_binary=df$category_binary[1])
-    
-}) %>% mutate(my_alphas=255*(percent_dens+(1-max(percent_dens)))) %>% #make the max value 1 
-    mutate(col=rgb(34,151,230,max=255,alpha=my_alphas)) #have colors be  transparencnt basded on density
-
-
-hist_df=densities_df %>% mutate(pct=ifelse(category_binary,1-percent_dens,percent_dens))
-my_cols=RColorBrewer::brewer.pal(3,"Accent")
-pdf('figures/new_abund_plot.pdf')
-ggplot() +
-    geom_segment(data=h[h$category_binary==1,], size=4, show.legend=FALSE,colour=my_cols[1],
-                 aes(x=abund_scaled, xend=abund_scaled, y=category_binary, yend=pct)) +
-    geom_segment(data=h[h$category_binary==0,], size=4, show.legend=FALSE,colour=my_cols[2],
-                 aes(x=abund_scaled, xend=abund_scaled, y=category_binary, yend=pct))+
-    geom_segment(dat=new_df[new_df$category_binary==0,], aes(x=abund_scaled, xend=abund_scaled, y=0, yend=-0.02), size=0.2, colour="grey30") +
-    geom_segment(dat=new_df[new_df$category_binary==1,], aes(x=abund_scaled, xend=abund_scaled, y=1, yend=1.02), size=0.2, colour="grey30") +
-    geom_line(data=data.frame(x=abund_ordered, 
-                              y=prob_host), 
-              aes(x,y), colour="grey50", lwd=1) +
-    theme_bw(base_size=12)+theme(
-        # Hide panel borders and remove grid lines
-        panel.border = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        # Change axis line
-        axis.line = element_line(colour = "black")
-    )+
-    labs(x='abundance (corrected for effort and scaled)',y='probability of hosting a specialist bee')
-
-dev.off()
-
-
-#try doing the color gradient 
-my_alphas=dens_vec*255
-transparent_cols=rgb(34,151,230,max=255,alpha=my_alphas)
-plot(col=transparent_cols)
-b=new_df %>% split(.$category_binary)
-df= b[[1]]
 break_n=40
 abund_min=min(new_df$abund_scaled); abund_max=max(new_df$abund_scaled)
 my_breaks=seq(abund_min,abund_max,by=(abund_max-abund_min)/break_n) 
@@ -234,69 +190,38 @@ my_breaks=seq(abund_min,abund_max,by=(abund_max-abund_min)/break_n)
 densities_df=new_df %>% split(.$category_binary) %>% map_dfr(function(df){
     dens=hist(df$abund_scaled,plot=F,breaks=my_breaks)
     percent_dens=  dens$density/sum(dens$density)
-
+    
     
     data.frame(abund_scaled=dens$mid,percent_dens=percent_dens) %>% 
         mutate(category_binary=df$category_binary[1])
     
-}) %>% mutate(my_alphas=255*(percent_dens+(1-max(percent_dens)))) %>% #make the max value 1 
-    mutate(col=rgb(34,151,230,max=255,alpha=my_alphas)) #have colors be  transparencnt basded on density
+}) 
 
-densities_df[densities_df$percent_dens==0,]$col='white'
-hist(log(densities_df$percent_dens))
-min_dens=min(densities_df[densities_df$percent_dens!=0,]$percent_dens)
-max_dens=max(densities_df$percent_dens)
-new_col_seq=seq(min_dens,max_dens,by=(max_dens-min_dens)/8)
-col_gradient=RColorBrewer::brewer.pal(9,'YlOrRd')
-col_gradient1=RColorBrewer::brewer.pal(9,'YlOrRd')
+hist_df=densities_df %>% mutate(pct=ifelse(category_binary,1-percent_dens,percent_dens))
+my_cols=RColorBrewer::brewer.pal(3,"Accent")
 
-col_gradient2=col_gradient[c(3,5,7,9)]
+# pdf('figures/new_abund_plot.pdf')
+ggplot() +
+    geom_segment(data=hist_df[hist_df$category_binary==1,], size=4, show.legend=FALSE,colour=my_cols[1],
+                 aes(x=abund_scaled, xend=abund_scaled, y=category_binary, yend=pct)) +
+    geom_segment(data=hist_df[hist_df$category_binary==0,], size=4, show.legend=FALSE,colour=my_cols[2],
+                 aes(x=abund_scaled, xend=abund_scaled, y=category_binary, yend=pct))+
+    geom_segment(dat=new_df[new_df$category_binary==0,], aes(x=abund_scaled, xend=abund_scaled, y=0, yend=-0.02), size=0.2, colour="grey30") +
+    geom_segment(dat=new_df[new_df$category_binary==1,], aes(x=abund_scaled, xend=abund_scaled, y=1, yend=1.02), size=0.2, colour="grey30") +
+    geom_line(data=data.frame(x=abund_ordered, 
+                              y=prob_host), 
+              aes(x,y), colour="black", lwd=1) +
+    theme_bw(base_size=12)+theme(
+        # Hide panel borders and remove grid lines
+        panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        # Change axis line
+        axis.line = element_line(colour = "black"),
+        text = element_text(size=20)
+    )+
+    labs(x='abundance (corrected for effort and scaled)',y='probability of hosting a specialist bee')
 
-densities_df$new_col=col_gradient[1]
-for(i in 2:length(col_gradient1)){
-    densities_df[densities_df$percent_dens>=new_col_seq[i],]$new_col=col_gradient[i]
-    
-}
-densities_df[densities_df$percent_dens==0,]$new_col='white'
-densities_df$line_col=ifelse(densities_df$new_col=='white',"white",'black')
-
-new_col_seq2=seq(min_dens,max_dens,by=(max_dens-min_dens)/length(col_gradient2))
-
-mid_pts_density=c(mean(c(new_col_seq2[1],new_col_seq2[2])))
-labs_vec=c(paste0(round(new_col_seq2[1],3)," - ",round(new_col_seq2[2],2)))
-
-densities_df$new_col2=col_gradient2[1]
-for(i in 2:length(col_gradient2)){
-    densities_df[densities_df$percent_dens>=new_col_seq2[i],]$new_col2=col_gradient2[i]
-    mid_pts_density[i]=mean(c(new_col_seq2[i],new_col_seq2[i+1]))
-    labs_vec[i]=paste0(round(new_col_seq2[i],2)," - ",round(new_col_seq2[i+1],2))
-    
-    
-}
-densities_df[densities_df$percent_dens==0,]$new_col2='white'
-
-# pdf('figures/phyloglm_results_22nov2021.pdf')
-par(cex.lab=1.8,cex.axis=1.5,xpd=T,mar=c(4,5,5,9),mfrow=c(1,1))
-plot(abund_ordered,prob_host,type='n',ylim=c(0,1),ylab='Probability of hosting a specialist bee',xlab='Abundance (corrected for effort and scaled)')
-lines(abund_ordered,prob_host,type = "l",lwd=3)
-with(densities_df,points(abund_scaled,category_binary,pch=22,cex=1.2,bg=new_col2,col=new_col2))
-with(densities_df,legend('topright',title='Proportion \nof observations',legend=labs_vec,pch=22,cex=1.2,bty='n',
-                         pt.bg=col_gradient2,col=line_col,inset=c(-0.4,0)))
 # dev.off()
 
 
-#old
-col_df=data.frame(col=c(unique(densities_df[densities_df$percent_dens!=0,]$col),'white'),
-           new_col=c(RColorBrewer::brewer.pal(8,'YlOrRd'),"white") )
-
-densities_df_col=densities_df %>% left_join(col_df)
-
-par(cex.lab=1.8,cex.axis=1.5,mar=c(4.8,5.1,3.1,2.1))
-plot(abund_ordered,prob_host,type='n',ylim=c(0,1),ylab='Probability of hosting a specialist bee',xlab='Abundance (corrected for effort and scaled)')
-lines(abund_ordered,prob_host,type = "l",lwd=3)
-with(densities_df_col,points(abund_scaled,category_binary,pch=15,cex=.7,col=new_col))
-
-RColorBrewer::brewer.pal(9,'YlOrRd')
-unique(densities_df$col)
-    
-    
