@@ -2,6 +2,7 @@ rm(list=ls())
 library(tidyverse)
 library(furrr)
 library(phylolm)
+setwd("/Users/colleen/Dropbox/github/specialist_bees")
 select=dplyr::select; map =purrr::map
 
 #upload data formatted for phyloglm analysis
@@ -25,6 +26,7 @@ sisters=read_csv("inat_analysis/sisters_02nov2021.csv") %>%
     filter(keep & !focal_a_crop) #get rid of plants that don't meet criteria
 
 set.seed(100) #set seed for blinding the data: randomizing the predictor variables within pairs 
+
 #change data into a long format (separate rows for each plant in a pair)
 sisters_long=sisters %>% mutate(pair_id=1:n()) %>% 
     select(focal_genus,sister_genus,dist,pair_id) %>%
@@ -45,22 +47,36 @@ paired_df=paired_genera  %>%
 #run paired analysis
 #add a column for ln abundance
 paired_df=paired_df %>% mutate(abund_log10=log10(effort_corrected_abund))
-
 #run paired t-test
 
 #reformat the data to visualize if differences are normally distributed
 test_mapfun=paired_df %>% split(.$pair_id)
-df=test_mapfun[[1]]
+df=test_mapfun[[30]]
 df_differences=paired_df %>% split(.$pair_id) %>% map_dfr(function(df) {
+    spec=df[df$category=='specialist_host',]$effort_corrected_abund
+    not_spec=df[df$category=='nonhost',]$effort_corrected_abund
     
     the_diff=df[df$category=='specialist_host',]$effort_corrected_abund-df[df$category=='nonhost',]$effort_corrected_abund
     the_diff_log=log10(df[df$category=='specialist_host',]$effort_corrected_abund)-log10(df[df$category=='nonhost',]$effort_corrected_abund)
-    
-    data.frame(pair_id=df$pair_id[1],diff=the_diff,diff_log_abund=the_diff_log)
+    percent_diff=(spec-not_spec)/spec*100
+    data.frame(pair_id=df$pair_id[1],diff=the_diff,diff_log_abund=the_diff_log,percent_diff=percent_diff)
     
     })
-hist(df_differences$diff)
-hist(df_differences$diff_log_abund) #looks better - though this may change upon unblinding data though
+hist(df_differences$percent_diff)
+median(df_differences$percent_diff)
+paired_df %>% split(.$pair_id) %>% map_dfr(function(df) {
+    
+    
+    data.frame(specialist_host=df[df$category=='specialist_host',]$genus,nonhost=df[df$category=='nonhost',]$genus)
+    
+})
+
+# pdf('figures/histograms_differences.pdf',width=11)
+par(mfrow=c(1,2))
+hist(df_differences$diff,xlab='difference between pairs in abundance \n(raw data)',main='')
+hist(df_differences$diff_log_abund,xlab='difference between pairs in abundance \n(log-transformed data)',main='') #looks better - though this may change upon unblinding data though
+# dev.off()
+
 library(ggpubr)
 ggqqplot(df_differences$diff)
 shapiro.test(df_differences$diff)
@@ -76,8 +92,11 @@ t.test(Pair(specialist_host, nonhost) ~ 1, ,alternative='greater',data = pairs_w
 less_or_more=ifelse(mean(df_differences$diff)<0,'less','more')
 
 
-print(paste0('Plants hosting specialist bees were, on average, ', abs(round(mean(df_differences$diff),3)*100), '% ',less_or_more,' abundant than close relatives not hosting specialist bees (median percent difference = ',round(median(df_differences$diff),3)*100,"%)"))
+print(paste0('Plants hosting specialist bees were, on average, ', 
+             abs(round(mean(df_differences$diff),3)*100), '% ',
+             less_or_more,' abundant than close relatives not hosting specialist bees (median percent difference = ',round(median(df_differences$diff),3)*100,"%)"))
 df_differences
+
 #need to report diffs on a raw scale
 mean(pairs_wide$specialist_host)
 mean(pairs_wide$nonhost)
@@ -121,6 +140,7 @@ with(paired_df,boxplot(effort_corrected_abund~category,boxwex=c(.35,.35),
  paired_df %>% group_by(category) %>% summarize(med= median(effort_corrected_abund))
  paired_df %>% group_by(category) %>% summarize(med= median(abund_scaled))
 data.frame(pairs_wide)
+
 #run all angiosperm analysis on blinded data
 obs_mod=phyloglm(category_binary~abund_scaled,phy=new_tree,data=new_df,btol=40,method = c("logistic_MPLE"))
 summary(obs_mod)
@@ -174,7 +194,19 @@ if(obs_beta>0){
     }
 if(obs_beta<0){
     print(paste0('The least abundant angiosperm in our data had an ',round(max(prob_host)*100),'% chance of hosting pollen specialist bee species, whereas the most abundant angiosperm in our data had an ', round(min(prob_host)*100),'% chance.'))
-    }
+}
+
+#basic stats about sample size
+sum(new_df$raw_abund)
+nrow(paired_df)
+hosts=read_csv("~/Dropbox/Fall_2014/postdoc/inat project/data_current/bee_hosts_allUS.csv") %>% 
+    filter(plant_rank=="genus" & region=='east')
+a=paired_df %>% filter(category=="specialist_host") %>% 
+    left_join(hosts %>% rename(genus=host_plant))
+data.frame(hosts %>% filter(host_plant %in% paired_df$genus) %>% group_by(host_plant) %>% 
+    summarize(n_distinct(bee)))
+paired_df%>% filter(category=="specialist_host" & !genus %in% hosts$host_plant)
+head(a)
 
 # pdf('figures/phyloglm_results_22nov2021.pdf',width=8)
 par(cex.lab=1.8,cex.axis=1.5,mar=c(4.8,5.1,3.1,2.1))
@@ -198,16 +230,19 @@ densities_df=new_df %>% split(.$category_binary) %>% map_dfr(function(df){
 }) 
 
 hist_df=densities_df %>% mutate(pct=ifelse(category_binary,1-percent_dens,percent_dens))
-my_cols=RColorBrewer::brewer.pal(3,"Accent")
+my_cols=RColorBrewer::brewer.pal(8,"Accent")
 
-# pdf('figures/new_abund_plot.pdf')
+field_plants=c('Salix','Claytonia','Vaccinium','Cucurbita','Cornus','Lysimachia','Pontederia','Solidago')
+new_df %>% filter(genus %in% field_plants)  %>% arrange(abund_scaled)
+ # pdf('figures/new_abund_plot_08dec2021.pdf')
 ggplot() +
     geom_segment(data=hist_df[hist_df$category_binary==1,], size=4, show.legend=FALSE,colour=my_cols[1],
                  aes(x=abund_scaled, xend=abund_scaled, y=category_binary, yend=pct)) +
     geom_segment(data=hist_df[hist_df$category_binary==0,], size=4, show.legend=FALSE,colour=my_cols[2],
                  aes(x=abund_scaled, xend=abund_scaled, y=category_binary, yend=pct))+
     geom_segment(dat=new_df[new_df$category_binary==0,], aes(x=abund_scaled, xend=abund_scaled, y=0, yend=-0.02), size=0.2, colour="grey30") +
-    geom_segment(dat=new_df[new_df$category_binary==1,], aes(x=abund_scaled, xend=abund_scaled, y=1, yend=1.02), size=0.2, colour="grey30") +
+    geom_segment(dat=new_df[new_df$category_binary==1,] %>% filter(!genus %in% field_plants), aes(x=abund_scaled, xend=abund_scaled, y=1, yend=1.02), size=0.2, colour="grey30") +
+    geom_segment(dat=new_df[new_df$category_binary==1,] %>% filter(genus %in% field_plants), aes(x=abund_scaled, xend=abund_scaled, y=1, yend=1.02), size=0.2, colour=my_cols[6]) +
     geom_line(data=data.frame(x=abund_ordered, 
                               y=prob_host), 
               aes(x,y), colour="black", lwd=1) +
@@ -222,6 +257,6 @@ ggplot() +
     )+
     labs(x='abundance (corrected for effort and scaled)',y='probability of hosting a specialist bee')
 
-# dev.off()
+ # dev.off()
 
 
