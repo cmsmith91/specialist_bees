@@ -25,6 +25,8 @@ focal[focal$species=="Viburnum opulus var. americanum",]$plant_code <- 'vibtri'
 spec_hosts=focal %>% filter(type == 'Specialist host')
 non_hosts=focal %>% filter(type == 'Non-host')
 nrow(non_hosts);nrow(spec_hosts)
+#how many genera of non-hosts?
+n_distinct(gsub(" .*","",non_hosts$species))
 
 #load bee species data
 genera=read_csv("pollen specialization bee id spreadsheet-19jan2022.csv") %>% #load genus level id of bees
@@ -356,7 +358,7 @@ prop_pollen_plot=ggplot(df_faked,aes(x=plant_type,y=prop,color=plant_type))+
           text = element_text(size = text_size),
           legend.position = "none") +
     xlab("Plant type") +
-    ylab("Proportion of visited plant's pollen in pollen load")+
+    ylab("Proportion of visited pollen in pollen load")+
     scale_fill_manual(values = c(my_cols[1], my_cols[2])) 
 (total_pollen_plot=ggplot(total,aes(x=plant_type,y=sum_prop2,color=plant_type))+
     geom_half_boxplot(aes(fill = plant_type, alpha = 0.8),  color= "black", nudge = 0.01, outlier.color = NA) +
