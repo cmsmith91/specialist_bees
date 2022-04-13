@@ -98,26 +98,45 @@ print(paste0('Plants hosting specialist bees were, on average, ',
 df_differences
 
 #need to report diffs on a raw scale
-mean(pairs_wide$specialist_host)
-mean(pairs_wide$nonhost)
+host_abund=mean(paired_df[paired_df$category=='specialist_host',]$effort_corrected_abund)
+nhost_abund=mean(paired_df[paired_df$category=='nonhost',]$effort_corrected_abund)
 
+(host_abund-nhost_abund)/(nhost_abund)*100 #percent increase
+(host_abund)/(nhost_abund)#times abundant
+
+
+
+#what is the percent difference for the pair with the median difference?
+diff=pairs_wide$specialist_host-pairs_wide$nonhost
+med_diff=median(diff)
+pairs_wide[which(diff==med_diff),]
+middle_pair=paired_df %>% filter(pair_id==22)
+host_abund2=middle_pair[middle_pair$category=='specialist_host',]$effort_corrected_abund
+nonhost_abund2=middle_pair[middle_pair$category=='nonhost',]$effort_corrected_abund
+
+(host_abund2-nonhost_abund2)/(nonhost_abund2)*100 #percent increase
+(host_abund2)/(nonhost_abund2) #percent increase
 
 #make transparent color for figure
 transparent_col=rgb(225,225,225,max=255,alpha=0)
 col2rgb(4)
 percent_col=40
 my_alpha=( percent_col) * 255 / 100
+my_alpha2=60*225/100
 blue_transparent=rgb(34,151,230,max=255,alpha=my_alpha)
-loc_nonhost=1.2; loc_host=1.8
+blue_transparent2=rgb(34,151,230,max=255,alpha=my_alpha2)
 
-# pdf('figures/paired_analysis_boxplot_16nov2021.pdf')
+loc_nonhost=1.2; loc_host=1.8
+par(mfrow=c(1,1))
+
+# pdf('figures/paired_analysis_boxplot_25feb2022.pdf')
 par(mar=c(4.5,5.5,3,2),cex.lab=1.5,cex.axis=1.4,cex=1.5)
 with(paired_df,
-     stripchart(abund_log10~category,
-                ylab='log10(effort-corrected abundance)',
-                xlab='Plant type',
-                group.names=c('non-host','host'),
-                vertical=T,pch=16,col=4,cex=.8,at=c(loc_nonhost,loc_host)))
+     stripchart(abund_log10~(category),
+                ylab=expression('log'[10]*'(effort-corrected abundance)'),
+                xlab='plant type',
+                group.names=c('nonhost','host'),
+                vertical=T,pch=16,col=blue_transparent2,cex=.5,at=c(loc_nonhost,loc_host)))
 for(i in 1:nrow(pairs_wide)){segments(loc_nonhost, pairs_wide$nonhost[i], loc_host, pairs_wide$specialist_host[i],lty=2,col=blue_transparent)}
 with(paired_df,boxplot(abund_log10~category,boxwex=c(.35,.35),
                                xaxt = "n" ,xlab='Plant type',pch=1,col=transparent_col,alpha=.1,at=c(loc_nonhost,loc_host),add=T))
@@ -138,8 +157,14 @@ with(paired_df,boxplot(effort_corrected_abund~category,boxwex=c(.35,.35),
  # dev.off()
 
  paired_df %>% group_by(category) %>% summarize(med= median(effort_corrected_abund))
+ 
  paired_df %>% group_by(category) %>% summarize(med= median(abund_scaled))
 data.frame(pairs_wide)
+
+#summary of new_df
+paste0(sum(new_df$raw_abund),' observations')
+paste0(nrow(new_df),' plant genera') #number of genera
+
 
 #run all angiosperm analysis on blinded data
 obs_mod=phyloglm(category_binary~abund_scaled,phy=new_tree,data=new_df,btol=40,method = c("logistic_MPLE"))
@@ -178,12 +203,40 @@ null_betas=as.vector(permut_output$null_beta[1:n_perm])
 r=sum(null_betas>obs_beta)
 (pval=(r+1)/(n_perm+1))
 
+#bootstrap confidence intervals for the slope
+#resample with replacement from the data 1000 times
+boot_n=2000
+plan(multisession(workers=6))
+boot_output=1:boot_n %>% future_map(function(i){
+    indices=sample(1:nrow(new_df),size=nrow(new_df),replace=T)
+    boot_data=new_df[indices,]
+    boot_glm=phyloglm(category_binary~abund_scaled,phy=new_tree,data=boot_data,btol=40,method = c("logistic_MPLE"))
+    coefs=boot_glm$coefficients 
+    names(coefs)<-c('intercept','abund_scaled')
+    return(coefs)
+}, .options = furrr_options(seed = 175456))
+
+#order the bootoutput
+boot_arranged=boot_output %>% bind_rows %>% arrange(abund_scaled)
+lower_coefs=boot_arranged[50,]
+lower_intercept=as.numeric(lower_coefs[1]);lower_slope=as.numeric(lower_coefs[2])
+
+upper_coefs=boot_arranged[1950,]
+upper_intercept=as.numeric(upper_coefs[1]);upper_slope=as.numeric(upper_coefs[2])
+
+
 #now plot the model prediction and results
 # get probabilities from the model coefficients
 obs_intercept=coef(obs_mod)[1]
 prob_host=exp(obs_intercept+obs_beta*new_df$abund_scaled)/(1+exp(obs_intercept+obs_beta*new_df$abund_scaled))
 prob_host=prob_host[order(prob_host)]
 abund_ordered=new_df$abund_scaled[order(new_df$abund_scaled)]
+
+#get y-vals for upper and lower ci lines
+lower_y=exp(lower_intercept+lower_slope*new_df$abund_scaled)/(1+exp(lower_intercept+lower_slope*new_df$abund_scaled))
+upper_y=exp(upper_intercept+upper_slope*new_df$abund_scaled)/(1+exp(upper_intercept+upper_slope*new_df$abund_scaled))
+ci_df=data.frame(upper_y=upper_y,lower_y=lower_y,abund_scaled=new_df$abund_scaled) %>% arrange(abund_scaled)
+
 
 #get effect sizes
 percent_increase=round((max(prob_host)-min(prob_host))/min(prob_host)*100,1)
@@ -201,19 +254,43 @@ sum(new_df$raw_abund)
 nrow(paired_df)
 hosts=read_csv("~/Dropbox/Fall_2014/postdoc/inat project/data_current/bee_hosts_allUS.csv") %>% 
     filter(plant_rank=="genus" & region=='east')
-a=paired_df %>% filter(category=="specialist_host") %>% 
-    left_join(hosts %>% rename(genus=host_plant))
 data.frame(hosts %>% filter(host_plant %in% paired_df$genus) %>% group_by(host_plant) %>% 
     summarize(n_distinct(bee)))
 paired_df%>% filter(category=="specialist_host" & !genus %in% hosts$host_plant)
-head(a)
 
 # pdf('figures/phyloglm_results_22nov2021.pdf',width=8)
 par(cex.lab=1.8,cex.axis=1.5,mar=c(4.8,5.1,3.1,2.1))
 plot(abund_ordered,prob_host,type='n',ylim=c(0,1),ylab='Probability of hosting a specialist bee',xlab='Abundance (corrected for effort and scaled)')
+for(vec in boot_output) {
+    y_val=exp(vec[1]+vec[2]*new_df$abund_scaled)/(1+exp(vec[1]+vec[2]*new_df$abund_scaled))
+    y_val=y_val[order(y_val)]
+    lines(x=ci_df$abund_scaled,y_val,col=adjustcolor('gray',alpha=.5))
+}
 lines(abund_ordered,prob_host,type = "l",lwd=3)
 with(new_df,points(abund_scaled,category_binary,pch="|",cex=.6))
+
+#add boot-strapped cis to visualize uncertainty
+boot_output
+abund_seq=seq(min(new_df$abund_scaled),max(new_df$abund_scaled),length.out=1000)
+boot_pred=boot_output %>% map(function(coef_vec){
+    intercept=coef_vec[1];slope=coef_vec[2]
+    data.frame(y_pred=exp(intercept+slope*abund_seq)/(1+exp(intercept+slope*abund_seq)))
+})
+boot_pred_df=boot_pred %>% bind_cols
+boot_pred_cis=apply(boot_pred_df,1,function(x) x[order(x)][c(50,1950)])
+
+#add predictions to graph as well
+prob_host_seq=exp(obs_intercept+obs_beta*abund_seq)/(1+exp(obs_intercept+obs_beta*abund_seq))
+
+new_ci_df=data.frame(t(boot_pred_cis)) %>% rename(lower_ci=X1,upper_ci=X2) %>%
+    mutate(abund=abund_seq,prob_host=prob_host_seq)
+ci_df
+
 # dev.off()
+#which are the 10 most common plants in the data
+head(new_df)
+new_df_arranged=new_df %>% arrange(desc(abund_scaled))
+new_df_arranged[1:20,]
 
 break_n=40
 abund_min=min(new_df$abund_scaled); abund_max=max(new_df$abund_scaled)
@@ -234,6 +311,10 @@ my_cols=RColorBrewer::brewer.pal(8,"Accent")
 
 field_plants=c('Salix','Claytonia','Vaccinium','Cucurbita','Cornus','Lysimachia','Pontederia','Solidago')
 new_df %>% filter(genus %in% field_plants)  %>% arrange(abund_scaled)
+
+#get conf intervals around line
+summary(obs_mod)
+
  # pdf('figures/new_abund_plot_08dec2021.pdf')
 ggplot() +
     geom_segment(data=hist_df[hist_df$category_binary==1,], size=4, show.legend=FALSE,colour=my_cols[1],
@@ -243,9 +324,13 @@ ggplot() +
     geom_segment(dat=new_df[new_df$category_binary==0,], aes(x=abund_scaled, xend=abund_scaled, y=0, yend=-0.02), size=0.2, colour="grey30") +
     geom_segment(dat=new_df[new_df$category_binary==1,] %>% filter(!genus %in% field_plants), aes(x=abund_scaled, xend=abund_scaled, y=1, yend=1.02), size=0.2, colour="grey30") +
     geom_segment(dat=new_df[new_df$category_binary==1,] %>% filter(genus %in% field_plants), aes(x=abund_scaled, xend=abund_scaled, y=1, yend=1.02), size=0.2, colour=my_cols[6]) +
-    geom_line(data=data.frame(x=abund_ordered, 
-                              y=prob_host), 
-              aes(x,y), colour="black", lwd=1) +
+    # geom_line(data=data.frame(x=abund_ordered, 
+    #                           y=prob_host), 
+    #           aes(x,y), colour="black", lwd=1) +
+    geom_ribbon(data=new_ci_df,aes(x=abund_seq,ymin = lower_ci, ymax = upper_ci), fill = adjustcolor("grey90",.5)) + 
+    geom_line(data=new_ci_df,aes(x=abund_seq,y=prob_host),color='black',lwd=1)+
+    #geom_line(data=new_ci_df,aes(abund_seq,upper_ci),color='gray',lwd=1)+
+    #geom_line(data=new_ci_df,aes(abund_seq,lower_ci),color='gray',lwd=1)+
     theme_bw(base_size=12)+theme(
         # Hide panel borders and remove grid lines
         panel.border = element_blank(),
