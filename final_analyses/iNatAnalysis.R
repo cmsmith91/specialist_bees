@@ -125,9 +125,11 @@ color_vec=adjustcolor(with(paired_df,my_cols[as.factor(category)]),.2)
 color_vec2=adjustcolor(with(paired_df,my_cols[as.factor(category)]),.7)
 
 black_shade=adjustcolor('black',.4)
+loc_nonhost=1.2; loc_host=1.8
 
 # pdf('figures/paired_analysis_boxplot_19april2022.pdf')
-par(mar=c(4.5,5.5,3,2),cex.lab=1.5,cex.axis=1.4,cex=1.5)
+
+par(mfrow=c(1,1),mar=c(4.5,5.5,3,2),cex.lab=1.5,cex.axis=1.4,cex=1.5)
 with(paired_df,
      stripchart(abund_log10~(category),
                 ylab=expression('log'[10]*'(effort-corrected abundance)'),
@@ -241,7 +243,6 @@ if(sum(is.na(keep_me[1:boot_n]))>1) print('stop, not enough models converged')
 boot_df=boot_output2[keep_me[1:boot_n]] %>% map(function(df)data.frame(df$y_pred)) %>% bind_cols
 hist(as.numeric(boot_df[1,]))
 boot_pred_cis=apply(boot_df,1,function(x) quantile(x,probs=c(.025,.975)))
-
 
 
 
