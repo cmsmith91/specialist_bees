@@ -1,0 +1,41 @@
+species,family,type,native_status,genus,plant_code,genus2
+Solidago canadensis,Asteraceae,Specialist host,Native,Solidago,solcan,Solidago
+Cornus sericea,Cornaceae,Specialist host,Native,Cornus,corser,Cornus
+Cucurbita pepo,Cucurbitaceae,Specialist host,Native,Cucurbita,cucpep,Cucurbita
+Vaccinium myrtilloides,Ericaceae,Specialist host,Native,Vaccinium,vacmyr,Vaccinium
+Claytonia caroliniana,Montiaceae,Specialist host,Native,Claytonia,clacar,Claytonia
+Pontederia cordata,Pontederiaceae,Specialist host,Native,Pontederia,poncor,Pontederia
+Lysimachia ciliata,Primulaceae,Specialist host,Native,Lysimachia,lyscil,Lysimachia
+Salix sp.,Salicaceae,Specialist host,NA,Salix,salix,Salix
+Viburnum opulus var. americanum,Adoxaceae,Non-host,Native,Viburnum,vibtri,Viburnum1
+Viburnum lentago,Adoxaceae,Non-host,Native,Viburnum,viblen,Viburnum2
+Rhus typhina,Anacardiaceae,Non-host,Native,Rhus,rhutyp,Rhus
+Daucus carota,Apiaceae,Non-host,Introduced,Daucus,daucar,Daucus
+Maianthemum canadense,Asparagaceae,Non-host,Native,Maianthemum,maican,Maianthemum
+Impatiens capensis,Balsaminaceae,Non-host,Native,Impatiens,impcap,Impatiens
+Betula populifolia,Betulaceae,Non-host,Native,Betula,betpop,Betula
+Echium vulgare,Boraginaceae,Non-host,Introduced,Echium,echvul,Echium
+Myosotis scorpioides,Boraginaceae,Non-host,Introduced,Myosotis,myosco,Myosotis
+Erysimum cheiranthoides,Brassicaceae,Non-host,Introduced,Erysimum,eryche,Erysimum
+Alliaria petiolata,Brassicaceae,Non-host,Introduced,Alliaria,allpet,Alliaria
+Barbarea vulgaris,Brassicaceae,Non-host,Introduced,Barbarea,barvul,Barbarea
+Lonicera xylosteum,Caprifoliaceae,Non-host,Introduced,Lonicera,lonxyl,Lonicera
+Silene vulgaris,Caryophyllaceae,Non-host,Introduced,Silene,silvul,Silene
+Convolvulus arvensis,Convolvulaceae,Non-host,Introduced,Convolvulus,conarv,Convolvulus
+Sedum acre,Crassulaceae,Non-host,Introduced,Sedum,sedacr,Sedum
+Euphorbia cyparissias,Euphorbiaceae,Non-host,Introduced,Euphorbia,eupcyp,Euphorbia
+Vicia cracca,Fabaceae,Non-host,Introduced,Vicia,viccra,Vicia
+Prunella vulgaris,Lamiaceae,Non-host,Native,Prunella,pruvul,Prunella
+Origanum vulgare,Lamiaceae,Non-host,Introduced,Origanum,orivul,Origanum
+Glechoma hederacea,Lamiaceae,Non-host,Introduced,Glechoma,glehed,Glechoma
+Lythrum salicaria,Lythraceae,Non-host,Introduced,Lythrum,lytsal,Lythrum
+Trillium grandiflorum,Melanthiaceae,Non-host,Native,Trillium,trigra,Trillium
+Anemone canadensis,Ranunculaceae,Non-host,Native,Anemone,anecan,Anemone
+Hepatica nobilis,Ranunculaceae,Non-host,Native,Hepatica,hepnob,Hepatica
+Caltha palustris,Ranunculaceae,Non-host,Native,Caltha,calpal,Caltha
+Sorbaria sorbifolia,Rosaceae,Non-host,Introduced,Sorbaria,sorsor,Sorbaria
+Prunus susquehanae,Rosaceae,Non-host,Native,Prunus,prusus,Prunus
+Acer campestre,Sapindaceae,Non-host,Introduced,Acer,acecam,Acer
+Saxifraga virginiensis,Saxifragaceae,Non-host,Native,Saxifraga,micvir,Saxifraga
+Verbascum thapsus,Scrophulariaceae,Non-host,Introduced,Verbascum,vertha,Verbascum
+Solanum dulcamara,Solanaceae,Non-host,Introduced,Solanum,soldul,Solanum
