@@ -1,9 +1,0 @@
-response variable,predictor variable added,AIC/AICc,df
-proportion visited plant's pollen,starting model,24528.204131545623,5
-proportion visited plant's pollen,+ (1|site),24458.56529962546,6
-proportion visited plant's pollen,+ year,24530.10123339849,6
-proportion visited plant's pollen,+ year + (1|site),24457.800399941905,7
-total pollen removed,starting model,532.1879869124741,4
-total pollen removed,+ (1|site),534.5382694073713,5
-total pollen removed,+ year,534.1535363341328,5
-total pollen removed,+ year + (1|site),536.584863045578,6
