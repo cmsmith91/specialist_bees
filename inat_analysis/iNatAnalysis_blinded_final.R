@@ -41,7 +41,9 @@ table(new_df$category)
 sisters=read_csv("sisters_02nov2021.csv") %>% 
     filter(keep & !focal_a_crop) #get rid of plants that don't meet criteria
 
-set.seed(100) #set seed for blinding the data: randomizing the predictor variables within pairs 
+#set seed for blinding the data: randomizing the predictor variables within pairs 
+set.seed(100) 
+
 #change data into a long format (separate rows for each plant in a pair)
 sisters_long=sisters %>% mutate(pair_id=1:n()) %>% 
     select(focal_genus,sister_genus,dist,pair_id) %>%
@@ -51,7 +53,7 @@ sisters_long=sisters %>% mutate(pair_id=1:n()) %>%
         df %>% 
             mutate(category_rand=sample(c('specialist_host','control'),2))})
         
-#make a vector of all focal genera in the paired analysis, then separate by family pair and genera pairs
+#make a vector of all focal genera in the paired analysis
 focal_genera=c(sisters$focal_genus,sisters$sister_genus)
 
 #format the data for the paired analysis
@@ -64,10 +66,11 @@ paired_df=paired_genera  %>%
 
 #run paired analysis
 #add a column for ln abundance
-paired_df=paired_df %>% mutate(log_abund=log(effort_corrected_abund)) #natural log abundance
+paired_df=paired_df %>% 
+  mutate(log_abund=log(effort_corrected_abund)) #natural log abundance
 
-#singular fit: Probably because there are
-# 2 obs per level of random effect?
+# code the mixed model below results in a singular fit: Probably because there are
+# only 2 observations per level of random effect?
 paired_mod=lmer(effort_corrected_abund~category_rand + (1| pair_id),data=paired_df)
 
 plot(paired_mod)
@@ -92,12 +95,13 @@ df_differences=paired_df %>% split(.$pair_id) %>% map_dfr(function(df) {
     })
 hist(df_differences$diff)
 hist(df_differences$diff_log_abund) #looks better - though this may change upon unblinding data though
+
 library(ggpubr)
 ggqqplot(df_differences$diff_log_abund) #looks ok
 shapiro.test(df_differences$diff_log_abund) #not sig different from a normal distribution
 
 
-#reformat the data so they're in a wide foramt for the t-test
+#reformat the data so they're in a wide format for the t-test
 pairs_wide=paired_df %>% mutate(abund_log10=log10(effort_corrected_abund)) %>%
     select(category_rand,pair_id,abund_log10) %>% 
     pivot_wider(names_from=category_rand,values_from=abund_log10)
@@ -105,7 +109,8 @@ t.test(Pair(specialist_host, control) ~ 1, ,alternative='greater',data = pairs_w
 less_or_more=ifelse(mean(df_differences$diff)<0,'less','more')
 print(paste0('Plants hosting specialist bees were, on average, ', abs(round(mean(df_differences$diff),3)*100), '% ',less_or_more,' abundant than close relatives not hosting specialist bees (median percent difference = ',round(median(df_differences$diff),3)*100,"%)"))
 
-# if the data are not normally distributed after unblinding, we will use a wilcoxin signed rank test
+# if the data are not normally distributed after unblinding, 
+# we will use a wilcoxin signed rank test
 wilcox.test(Pair(specialist_host, control) ~ 1, ,alternative='greater',data = pairs_wide)
 
 #make the figure
@@ -133,7 +138,7 @@ with(paired_df_blinded,boxplot(abund_log10~category_rand,boxwex=c(.35,.35),
 # dev.off()
 
 
-#run all angiosperm analysis on blinded data
+#run blind analysis on all angiosperm genera 
 obs_mod=phyloglm(blind_y~abund_scaled,phy=new_tree,data=new_df,btol=40,method = c("logistic_MPLE"))
 summary(obs_mod)
 obs_beta=coef(obs_mod)[2]
@@ -150,9 +155,10 @@ permut_output=1:n_perm %>% future_map(possibly(function(i){
     tibble(null_beta=null_beta,converged=converged)
 },otherwise=NULL),.options=furrr_options(seed=88)) %>% bind_rows
 
-# check whether number of permutations =n_perm
-# if not, do more permtuations in units of 10
-# until you get the correct number of converged permutations
+# check whether number of permutations = n_perm
+# (will likely not be becuase the model doesn't always converge)
+# if not, I'll do more permutations in units of 10
+# until I get the correct number of converged permutations
 while(sum(permut_output$converged)<n_perm){
     add_me=1:10 %>% future_map(possibly(function(i){
         new_y=sample(y_val)
