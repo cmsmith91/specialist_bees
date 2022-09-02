@@ -1,5 +1,4 @@
 rm(list=ls())
-setwd("field_analysis")
 library(tidyverse)
 library(furrr)
 library(readxl)
@@ -12,10 +11,10 @@ library(egg)
 library(MuMIn)
 map=purrr::map; select=dplyr::select
 #
-codes=read_csv('plantcodes_tonames.csv')
+codes=read_csv('field_analysis/plantcodes_tonames.csv')
 
 #load data. list of focal plants
-focal=read_excel('MethodsTable2021_2022-21jan2022.xlsx') %>% 
+focal=read_excel('field_analysis/MethodsTable2021_2022-21jan2022.xlsx') %>% 
     rename_all(tolower) %>%
     mutate(genus=sub(" .*","",species),epithet=sub(".* ","",species)) %>% 
     mutate(plant_code=ifelse(genus=='Salix','salix',paste0(tolower(substr(genus,1,3)), tolower(substr(epithet,1,3))))) %>%
@@ -31,16 +30,16 @@ nrow(non_hosts);nrow(spec_hosts)
 n_distinct(gsub(" .*","",non_hosts$species))
 
 #load bee species data
-genera=read_csv("pollen specialization bee id spreadsheet-14feb2022.csv") %>% #load genus level id of bees
+genera=read_csv("final_analyses/pollen specialization bee id spreadsheet-14feb2022.csv") %>% #load genus level id of bees
     rename(unique_id=uniqueID)%>%mutate(bee=ifelse(!is.na(species),paste0(genus,"_",species),paste0(genus,"_sp")))
 
 #load pinning log from both years
-specs=read_csv( "specialist bee pinning log2020and2021bees-cleaned21jan2022.csv") %>%
+specs=read_csv( "field_analysis/specialist bee pinning log2020and2021bees-cleaned21jan2022.csv") %>%
     filter(data)%>% 
     left_join(genera %>% select(unique_id,genus,species))
 
-#load prop pollen data
-data=read_csv('proportion_pollen_data_7april2022.csv') %>% 
+#load proportion pollen data
+data=read_csv('final_analyses/proportion_pollen_data_7april2022.csv') %>% 
     left_join(genera %>% select(unique_id,genus)) %>%
     filter(!is.na(genus)) %>%
     rename(plant_code=host_plant) %>%
@@ -48,11 +47,11 @@ data=read_csv('proportion_pollen_data_7april2022.csv') %>%
     mutate(plant_type=ifelse(spec_host,'host','nonhost'),year_factor=as.factor(year)) %>%
     mutate(plant_type=factor(plant_type,levels=c('nonhost','host')))
 
+
 # finally, load data of all the plants we collected from,
-# organized by site/sampling round 
-# (this is so i can include the plants we didn't collect any bees from in 'total pollen' analysis)
-sitedate_specplant=read_csv('sitedate_specialisthostplant-21jan2022.csv')
-schedule=read_csv("Specialist bee plant schedule 2020_2021-cleaned21jan2022.csv") %>%
+# organized by site and sampling round 
+sitedate_specplant=read_csv('field_analysis/sitedate_specialisthostplant-21jan2022.csv')
+schedule=read_csv("field_analysis/Specialist bee plant schedule 2020_2021-cleaned21jan2022.csv") %>%
     rename(genus_species="plant genus and species") %>%
     distinct(site,genus_species,date) %>% 
     filter(genus_species %in% focal$species)%>% left_join(sitedate_specplant) %>%
@@ -61,12 +60,13 @@ schedule[schedule$genus_species=="Saxifraga virginiensis",]$plant_code <- 'micvi
 schedule[schedule$genus_species=="Viburnum opulus var. americanum",]$plant_code <- 'vibtri'
 schedule[schedule$genus_species=="Salix sp.",]$plant_code <- 'salix'
 
-##get rid of cucpep sites from schedule (for sites where cucpep was the only specialist host plant)
-# for site where we also sampled solidago - just get rid of cucpep from the schedule
-head(schedule)
+##get rid of cucurbita (plant code == cucpep) sites from schedule, for sites 
+# where cucurbita was the only specialist host plant, for the site where we also 
+#sampled solidago - just get remove cucurbita from the schedule, but leave other plants
 schedule=schedule %>% filter(spec_host!='cucpep' &  plant_code !='cucpep')
 
-#convert roman numeral date to formatted date for calculations
+# the dates are formatted day-month (roman numeral)-year
+# convert this format to a format we can use to make calculations
 dates_rn=unique(schedule$date)
 year=as.numeric(substr(dates_rn,nchar(dates_rn)-3,nchar(dates_rn)))
 day_month_rn=substr(dates_rn,1,nchar(dates_rn)-4)
@@ -79,21 +79,24 @@ dates_df=data.frame(month_rn) %>%
     mutate(date=dates_rn,year=year,day=day) %>%
     mutate(date_formatted=dmy(paste(day,month,year,sep='-')))
 
-#max distance between dates at a site
+#what is the maximum number of days between the first and last sampling day at a site?
 schedule %>% left_join(dates_df %>% select(date,date_formatted)) %>%
     split(.$site_spec) %>% map(function(df) max(df$date_formatted)-min(df$date_formatted))
 
+
+nrow(data)
+#how many generalist bee taxa
+n_distinct(data$genus)
 
 
 
 # ###########
 # ###uncomment me to run analysis without: Echium vulgare, Convolvulus arvensis,
-# #Sororia sorbifolia, Prunus susquehanae,  Lythrum
+# #Sororia sorbifolia, Prunus susquehanae,  Lythrum salicaria
 # schedule=schedule %>% filter(!plant_code %in% c('lytsal',"prusus","sorsor","conarv","echvul","viccra"))
 # data=data %>% filter(!plant_code %in% c('lytsal',"prusus","sorsor","conarv","echvul","viccra"))
 
-#conduct blind analysis on the simulated data
-#start with model with plant type as fixed effect and genus and site as random effects
+#start with model where plant type is as fixed effect and genus and site are random effects
 mod_start=glmmTMB(cbind(n, n_nonhost)~plant_type + (1|genus) +(1|plant_code),family=betabinomial,data=data)
 mod_updated1=update(mod_start,.~.+(1|site))
 mod_updated2=update(mod_start,.~.+year_factor)
@@ -108,11 +111,6 @@ aic_tab_ms=aic_tab %>%
            "response variable"="proportion visited plant's pollen") %>%
     select('response variable','predictor variable added', AIC,df) %>%
     rename('AIC/AICc'=AIC)
-
-##i tried running these to fix the convergence issues of mod_updated1 -didn't work
-## these lines of code are commented out because they take a while to run
-# mod_updated1_optim=update(mod_updated1,control=glmmTMBControl(optimizer=optim,optArgs=list(method="BFGS")))
-# mod_updated1_optim2=update(mod_updated1,control=glmmTMBControl(optimizer=optim,optArgs=list(method="CG")))
 
 
 #pick the final model using AIC vals
@@ -132,15 +130,11 @@ if(nrow(better_mods) !=0){
 simulationOutput_finalmod <- simulateResiduals(fittedModel = mod_final)
 simulationOutput_finalmod2 <- simulateResiduals(fittedModel = mod_final,quantreg=T)
 
-plot(simulationOutput_finalmod)#nope
+plot(simulationOutput_finalmod)
 plot(simulationOutput_finalmod2)
 testCategorical(simulationOutput_finalmod, catPred = data$plant_type)
 testUniformity(simulationOutput_finalmod)
 data$ID=1:nrow(data)
-# new_mod=update(mod_final,~.+(1|ID)+(1|plant_type))
-# new_mod=update(mod_final,.~.,dispformula = ~ plant_type*year_factor)
-# new_mod=update(mod_final,.~.+(1|ID),dispformula = ~ plant_type+year_factor,ziformula = ~ plant_type + year_factor)
-# plot(simulateResiduals(new_mod))
 
 #plot residuals against predictors
 boxplot(residuals(mod_final)~data$plant_type) #that looks ok to me
@@ -161,6 +155,7 @@ plant_re=ranef(mod_genera)$cond$genus2 %>%
   mutate(genus2=row.names(.))%>% left_join(codes %>% select(genus2,type)) %>%
   mutate(type=as.factor(type))
 pchs=c(1,16)[plant_re$type]
+
 #which viburnum is which?
 data2 %>% filter(genus2 %in% c("Viburnum1","Viburnum2")) %>% distinct(plant_code,genus2)
 # pdf('plant_sp_effect.pdf')
@@ -168,28 +163,9 @@ lme4:::dotplot.ranef.mer(ranef(mod_genera)$cond,pch=pchs)$genus2
 # dev.off()
 
 #plot random effects
-
-
-
 mod_final$fitted
 bee_ests=ranef(mod_final)[[1]]$genus %>% rename(intercept="(Intercept)")
 plant_ests=ranef(mod_final,condVar=TRUE)[[1]]$genus%>% rename(intercept="(Intercept)")
-
-
-
-#get estimate for solidago
-mod_intercept=coef(summary(mod_final))$cond[1,1]
-plant_ranefs=ranef(mod_final)[[1]]$plant_code %>% mutate(plant=rownames(.)) %>%
-    rename(intercpet="(Intercept)")
-solcan_est=plant_ranefs[plant_ranefs$plant=='solcan',]$intercpet
-log_odds_solcan=sum(solcan_est,mod_intercept)
-(prob_solcan=exp(log_odds_solcan)/(1+exp(log_odds_solcan)))
-(numb_solcan=prob_solcan*200) # number of pollen grains from a nonhost plant
-
-
-solcan_est+mod_intercept
-
-
 
 #now get effect sizes:
 fixed_effs=as.data.frame(coef(summary(mod_final))$cond)[,1]
@@ -231,9 +207,8 @@ df=nrow(data)-df.residual(mod_final)
 paste0("(effect of hosting specialists on pollen collection  +- SE = ", round(plant_type_stats$estimate,2),"+-",round(plant_type_stats$std_error,2),
       ", n = ",nrow(data),", df = ",df, ", z = ",round(plant_type_stats$zval,2),', P = ',pval_char,')')
 
-### next analysis: look at the total pollen removed
-# calculate the total pollen removed 
-# blind the data by shuffling plants within sites
+#### next analysis: look at the total pollen removed by generalist bees in aggregate
+# see if it differs between plants that host specialists and non-host plants
 
 #code below assigns  zero values to plants that we didn't collect any bees off of
 i=20
@@ -272,7 +247,7 @@ prop_per_plantsite=1:(n_distinct(data$site_spec)) %>% map(function(i){
 total=prop_per_plantsite %>% bind_rows %>% 
     mutate(id=1:n(),year_factor=as.factor(year),plant_type=factor(plant_type,levels=c('nonhost','host')))  
 
-#plot some graphs
+#make some graphs
 hist(total$sum_prop2)
 hist(total$sum_n)
 
@@ -297,9 +272,6 @@ aic_tab_vis$delta_startmod=aic_tab_vis$AIC-aic_vismodstart
 better_vismods=aic_tab_vis %>% filter(delta_startmod<=-2)
 
 #make aic table for the supplement
-aic_tab_ms
-aic_tab_vis
-
 aic_tab_vis_ms=aic_tab_vis %>% 
     mutate("predictor variable added"=c('starting model','+ (1|site)','+ year','+ year + (1|site)'),
            "response variable"="total pollen removed") %>%
@@ -317,10 +289,6 @@ if(nrow(better_vismods) !=0){
 simulationOutput <- simulateResiduals(fittedModel = vismod_final)
 plot(simulationOutput)
 summary(vismod_final)
-
-#report summary stats and effect sizes
-paste0("Generalist bees visiting host plants used by specialist bees removed on average,
-x% more pollen grains than ones visiting nonhost plants not used by any specialists")
 
 
 coef_vistable=data.frame(coef(summary(vismod_final))$cond) %>%
@@ -369,7 +337,7 @@ prop_pollen_plot=ggplot(data,aes(x=plant_type,y=prop,color=plant_type))+
     geom_half_boxplot(aes(fill = plant_type, alpha = 0.8),  color= "black", nudge = 0.01, outlier.color = NA) +
     geom_half_violin(aes(fill = plant_type, alpha = 0.8), color= "black",
                      side = "r", nudge = 0.01)+
-    theme_bw() +
+    theme_bw(base_size=12) +
     theme(panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
           strip.text = element_text(face = "italic"),
@@ -383,7 +351,7 @@ prop_pollen_plot=ggplot(data,aes(x=plant_type,y=prop,color=plant_type))+
     geom_half_boxplot(aes(fill = plant_type, alpha = 0.8),  color= "black", nudge = 0.01, outlier.color = NA) +
     geom_half_violin(aes(fill = plant_type, alpha = 0.8), color= "black",
                      side = "r", nudge = 0.01)+
-    theme_bw() +
+    theme_bw(base_size=12) +
     theme(panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
           strip.text = element_text(face = "italic"),
@@ -397,147 +365,18 @@ prop_pollen_plot=ggplot(data,aes(x=plant_type,y=prop,color=plant_type))+
 # pdf('/Users/colleen/Dropbox/github/specialist_bees/figures/results_totalpollen.pdf',height=7,width=7)
 total_pollen_plot
 # dev.off()
-    # theme_bw(base_size=12)+theme(
-    #     # Hide panel borders and remove grid lines
-    #     panel.border = element_blank(),
-    #     panel.grid.major = element_blank(),
-    #     panel.grid.minor = element_blank(),
-    #     # Change axis line
-    #     axis.line = element_line(colour = "black"),
-    #     text = element_text(size=20)
-    # )+
+    
 
-# pdf('/Users/colleen/Dropbox/github/specialist_bees/figures/results_pollendata.pdf',width=12)
+# pdf('figures/results_pollendata-23may2022.pdf',width=12)
 ggarrange(prop_pollen_plot,  total_pollen_plot,
           labels = c("A", "B"),
           ncol = 2, nrow = 1)
 # dev.off()
 
 #switch order 
-pdf('/Users/colleen/Dropbox/github/specialist_bees/figures/results_pollendata-2.pdf',width=12)
+# pdf('figures/results_pollendata-2.pdf',width=12)
 ggarrange( total_pollen_plot,prop_pollen_plot, 
          
           ncol = 2, nrow = 1)
-dev.off()
-
-
-#old
-library(ggpol)
-a=ggplot(df_faked,aes(x=plant_type,y=prop,fill=plant_type))+
-    geom_boxjitter(outlier.color = NA, jitter.shape = 21, jitter.color = NA, 
-                    errorbar.draw = TRUE) +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          strip.text = element_text(face = "italic"),
-          strip.background = element_blank(),
-          text = element_text(size = 15),
-          legend.position = "none") +
-    xlab("Plant type") +
-    ylab("Proportion of visited plant's pollen in pollen load")+
-    scale_fill_manual(values = c(my_cols[1], my_cols[2])) #+
-
-
-#plot the results:
-ggplot(nshift, aes(x = survey, y = cwm, color = survey)) +
-    facet_wrap("habitat ~ .", scales = "free") +
-    geom_half_boxplot(aes(fill = survey, alpha = 0.8),  color= "grey50", nudge = 0.05, outlier.color = NA) +
-    geom_half_violin(aes(fill = survey, alpha = 0.8), color= "grey50",
-                     side = "r", nudge = 0.01) +
-    stat_summary(fun = mean, geom = "point", shape = 24, aes(fill = survey, color = survey), size = 4) +
-    theme_bw() +
-    theme(panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          strip.text = element_text(face = "italic"),
-          strip.background = element_blank(),
-          text = element_text(size = 15),
-          legend.position = "none") +
-    xlab("Survey period") +
-    ylab("CWM N-number")+
-    scale_fill_manual(values = c("lightcyan", "thistle1")) +
-    scale_color_manual(values = c("#29e786", "#E7298A")) -> cwmn_supp
-
-#######OLD:
-(m <- glmer(sum_prop2 ~ plant_type +year_factor+ (1 | site) + (1|id) , family = Gamma,data=total))
-(m2 <- glmer(sum_n ~ plant_type +year+ (1 | site) + (1|host_plant)+(1|id) , family = poisson,data=total))
-(m3 <- glmer(sum_n ~ plant_type +year+ (1 | site) + (1|host_plant), family = negative.binomial(2),data=total))
-(m4 <- glmer(sum_n ~ plant_type +year+ (1 | site) + (1|host_plant)+(1|id), family = negative.binomial(2),data=total))
-
-(m <- glmer(sum_n ~ plant_type +year+ (1 | site)  , family = poisson,data=total))
-(m <- glmer(sum_n ~ plant_type +year + (1|host_plant) , family = poisson,data=total))
-
-
-
-library("blmeco") 
-dispersion_glmer(m2) # over 1.4 means there's overdispersion
-dispersion_glmer(m3) 
-plot(m2)
-plot(m3)
-
-par(mfrow=c(1,3))
-plot(fitted(m2) ~ total$sum_n, col="darkgrey", 
-     xlab="Y (response)", ylab="Fitted Values",main='poisson with orle')
-abline(a=0, b=1, col="red")
-plot(fitted(m3) ~ total$sum_n, col="darkgrey",
-     xlab="Y (response)", ylab="Fitted Values",main='negative binomial (no orle)')
-abline(a=0, b=1, col="red")
-plot(fitted(m4) ~ total$sum_n, col="darkgrey",
-     xlab="Y (response)", ylab="Fitted Values", main='negative binomial with orle')
-abline(a=0, b=1, col="red")
-
-#From: https://rpubs.com/INBOstats/OLRE
-#"Models with an OLRE should be used carefully. Because OLRE can have a very 
-# strong influence on the model. One should always check the standard deviation 
-# of the ORLE."
-summary(m2) #std deviation of orle =2.7 (vs other random effects 0.7 and 0.9)
-summary(m3) #std deviation of orle =2.5 
-summary(m4) #std deviation of orle =2.5 
-
-fittedModel <- m2
-simulationOutput <- simulateResiduals(fittedModel = fittedModel)
-plot(simulationOutput)
-
-#----
-fittedModel <- m3
-simulationOutput <- simulateResiduals(fittedModel = fittedModel)
-plot(simulationOutput)
-
-#----
-fittedModel <- m4
-simulationOutput <- simulateResiduals(fittedModel = fittedModel)
-plot(simulationOutput)
-
-
-#issues with singularity so we'll go with a glm
-total_pollen_mod<- glm(sum_prop2 ~ plant_type +year, family = Gamma,data=total)
-plot(total_pollen_mod)
-summary(total_pollen_mod)
-with(total,boxplot(sum_prop2~plant_type))
-
-fittedModel <- total_pollen_mod
-simulationOutput <- simulateResiduals(fittedModel = fittedModel)
-plot(simulationOutput)
-
-range(total$sum_n)  # Actual response values Y range from 0 to 247
-
-set.seed(1234567)
-glmer_sim1 <- simulate(m2, nsim = 1000); 
-glmer_sim2 <- simulate(m3, nsim = 1000)
-hist(total$sum_n)
-par(mfrow=c(2,3))
-for(i in 1:6) hist(glmer_sim1[,i])
-for(i in 1:6) hist(glmer_sim2[,i])
-
-glm_sim1=simulate(total_pollen_mod,nsim=6)
-hist(total$sum_prop2)
-par(mfrow=c(2,3))
-for(i in 1:6) hist(glm_sim1[,i])
-
-
-
-set.seed(11)
-n_perm=999
-
-
-
+# dev.off()
 
