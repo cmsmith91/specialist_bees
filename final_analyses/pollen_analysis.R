@@ -62,7 +62,7 @@ schedule[schedule$genus_species=="Salix sp.",]$plant_code <- 'salix'
 
 ##get rid of cucurbita (plant code == cucpep) sites from schedule, for sites 
 # where cucurbita was the only specialist host plant, for the site where we also 
-#sampled solidago - just get remove cucurbita from the schedule, but leave other plants
+#sampled solidago - just remove cucurbita from the schedule, but leave other plants
 schedule=schedule %>% filter(spec_host!='cucpep' &  plant_code !='cucpep')
 
 # the dates are formatted day-month (roman numeral)-year
@@ -211,14 +211,14 @@ paste0("(effect of hosting specialists on pollen collection  +- SE = ", round(pl
 # see if it differs between plants that host specialists and non-host plants
 
 #code below assigns  zero values to plants that we didn't collect any bees off of
-i=20
+i=1
 prop_per_plantsite=1:(n_distinct(data$site_spec)) %>% map(function(i){ 
     
     #get the site round
     the_site_spec=unique(data$site_spec)[i]
     
     #plants_atsite includes all the plants we sampled from at a site
-    #even if we didn't collect any bees from them
+    #even if we didn't detect any bees on them
     plants_atsite=schedule %>% filter(site_spec==the_site_spec) %>% 
         distinct(plant_code)
     
@@ -227,15 +227,16 @@ prop_per_plantsite=1:(n_distinct(data$site_spec)) %>% map(function(i){
     
     total_pollen_df=df %>% 
         group_by(plant_code) %>% 
-        summarize(mean_prop=mean(prop),sum_prop=sum(prop),sum_n=sum(n)) 
+        summarize(mean_prop=mean(prop),sum_prop=sum(prop),sum_n=sum(n),visits =n()) 
     
-    #if 
+    #deal with plants that aren't in data bc we didn't detect any bees on them
     if(sum(!plants_atsite$plant_code %in% total_pollen_df$plant_code)>0){
         add_me_plants=plants_atsite$plant_code[!plants_atsite$plant_code %in% total_pollen_df$plant_code]
         total_pollen_df=total_pollen_df %>%
-            bind_rows(data.frame(plant_code=add_me_plants,mean_prop=0,sum_prop=0,sum_n=0))
-        }
-    total_pollen_blinded=total_pollen_df %>%
+            bind_rows(data.frame(plant_code=add_me_plants,mean_prop=0,sum_prop=0,sum_n=0,visits=0))
+    }
+    
+    total_pollen_df %>%
         mutate(spec_host=plant_code %in% spec_hosts$plant_code,
                site_spec=the_site_spec,year=as.character(df$year[1]),
                site=df$site[1]) %>%
@@ -246,6 +247,27 @@ prop_per_plantsite=1:(n_distinct(data$site_spec)) %>% map(function(i){
 #bind everything together to make a df for the analysis
 total=prop_per_plantsite %>% bind_rows %>% 
     mutate(id=1:n(),year_factor=as.factor(year),plant_type=factor(plant_type,levels=c('nonhost','host')))  
+
+#make a plot of visitation vs aggregate pollen removal
+head(total)
+with(total, plot(visits,sum_prop2))
+#get the R2 value of the relationship
+pearson = with(total,cor(visits, sum_prop2))
+pearson^2
+
+#double check i did that right
+visit_mod = with(total, lm(sum_prop2~visits))
+summary(visit_mod)
+
+#pdf of plot visits vs pollen removed for response to review
+pdf('figures/visits_vs_pollen.pdf')
+par(mar = c(5.1, 4.9, 4.1, 2.1))
+with(total, plot(visits,sum_prop2,cex=1.5,xlab = 'number of generalist bees visiting plant at site',ylab='pollen removed by generalist bees from plant at site',
+                 cex.lab=1.4))
+dev.off()
+
+#change margin size back to default
+par(mar = c(5.1, 4.1, 4.1, 2.1))
 
 #make some graphs
 hist(total$sum_prop2)
@@ -330,10 +352,10 @@ paste0("(effect of hosting specialists on pollen collection  +- SE = ", round(pl
 
 
 ##now plot the results
-text_size=20
+text_size=40
 with(total,boxplot(sum_prop2~plant_type))
 my_cols=RColorBrewer::brewer.pal(8,"Accent")
-prop_pollen_plot=ggplot(data,aes(x=plant_type,y=prop,color=plant_type))+
+(prop_pollen_plot=ggplot(data,aes(x=plant_type,y=prop,color=plant_type))+
     geom_half_boxplot(aes(fill = plant_type, alpha = 0.8),  color= "black", nudge = 0.01, outlier.color = NA) +
     geom_half_violin(aes(fill = plant_type, alpha = 0.8), color= "black",
                      side = "r", nudge = 0.01)+
@@ -345,8 +367,8 @@ prop_pollen_plot=ggplot(data,aes(x=plant_type,y=prop,color=plant_type))+
           text = element_text(size = text_size),
           legend.position = "none") +
     xlab("plant type") +
-    ylab("proportion of visited pollen in pollen load")+
-    scale_fill_manual(values = c(my_cols[2], my_cols[1])) 
+    ylab("proportion of visited pollen \nin pollen load")+
+    scale_fill_manual(values = c(my_cols[2], my_cols[1])) )
 (total_pollen_plot=ggplot(total,aes(x=plant_type,y=sum_prop2,color=plant_type))+
     geom_half_boxplot(aes(fill = plant_type, alpha = 0.8),  color= "black", nudge = 0.01, outlier.color = NA) +
     geom_half_violin(aes(fill = plant_type, alpha = 0.8), color= "black",
@@ -362,21 +384,24 @@ prop_pollen_plot=ggplot(data,aes(x=plant_type,y=prop,color=plant_type))+
     ylab("total pollen removed")+
     scale_fill_manual(values = c(my_cols[2], my_cols[1])) )
 
-# pdf('/Users/colleen/Dropbox/github/specialist_bees/figures/results_totalpollen.pdf',height=7,width=7)
-total_pollen_plot
-# dev.off()
-    
+# # pdf('/Users/colleen/Dropbox/github/specialist_bees/figures/results_totalpollen2.pdf',height=7,width=7)
+# total_pollen_plot
+# # dev.off()
+#     
+# #tiff('figures/results_pollendata-21mar2023.tiff', units="in", width=7, height=7, res=500, compression = 'lzw')
+# prop_pollen_plot
+# #dev.off()
 
 # pdf('figures/results_pollendata-23may2022.pdf',width=12)
+tiff('figures/results_pollendata-23mar2023.tiff', units="in", width=20, height=10, res=700, compression = 'lzw')
 ggarrange(prop_pollen_plot,  total_pollen_plot,
           labels = c("A", "B"),
-          ncol = 2, nrow = 1)
-# dev.off()
+          ncol = 2, nrow = 1,label.args = list(gp = grid::gpar(font = 4, cex =3.2)))
+dev.off()
 
 #switch order 
 # pdf('figures/results_pollendata-2.pdf',width=12)
-ggarrange( total_pollen_plot,prop_pollen_plot, 
-         
+ggarrange( total_pollen_plot,prop_pollen_plot,
           ncol = 2, nrow = 1)
 # dev.off()
 
