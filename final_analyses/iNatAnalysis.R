@@ -2,7 +2,8 @@ rm(list=ls())
 library(tidyverse)
 library(furrr)
 library(phylolm)
-setwd("specialist_bees")
+library('Cairo')
+# setwd("specialist_bees")
 select=dplyr::select; map =purrr::map
 
 #upload data formatted for phyloglm analysis
@@ -17,7 +18,14 @@ new_df$abund_scaled=as.vector(scale(new_df$effort_corrected_abund))
 #how many specialist bees?
 spec_bees = read_csv("final_analyses/bee_hosts_east.csv") %>%
   filter(host_plant %in% new_df$genus)
+check_bee_numbs= read_csv("final_analyses/bee_hosts_east.csv") %>% 
+  filter(plant_rank=="genus")
+n_distinct(check_bee_numbs$bee)
 n_distinct(spec_bees$bee)
+
+spec_bees %>%
+  group_by(bee) %>%summarize(n=n()) %>%
+  arrange(desc(n))
 
 #upload and format phylogenetic tree of the data
 angio_tree=readRDS("inat_analysis/tree_inat_angiosperms_30april2021.rds")
@@ -29,7 +37,10 @@ new_tree=keep.tip(scenario3,gsub(" ","_",new_df$species_underscore))
 #upload data for the paired analysis
 sisters=read_csv("inat_analysis/sisters_02nov2021.csv") %>% 
     filter(keep & !focal_a_crop) #get rid of plants that don't meet criteria
+sisters$focal_genus
 
+# #uncomment me to remove mismatched pairs for r2r
+# sisters = sisters %>% filter(!focal_genus  %in% c('Salix','Triodanis','Lysimachia'))
 
 #change data into a long format (separate rows for each plant in a pair)
 sisters_long=sisters %>% mutate(pair_id=1:n()) %>% 
@@ -94,6 +105,12 @@ print(paste0('Plants hosting specialist bees were, on average, ',
              abs(round(mean(df_differences$diff),3)*100), '% ',
              less_or_more,' abundant than close relatives not hosting specialist bees (median percent difference = ',round(median(df_differences$diff),3)*100,"%)"))
 
+#save table of pairs for response to review 
+pairs_table = paired_df  %>%
+  select(category,pair_id,plant_name) %>% 
+  pivot_wider(names_from=category,values_from=plant_name) %>%
+  select(-pair_id)
+# writexl::write_xlsx(pairs_table,'inat_analysis/pairs_table_r2r.xlsx')
 
 #need to report diffs on a raw scale
 host_abund = mean(paired_df[paired_df$category=='specialist_host',]$effort_corrected_abund)
@@ -124,18 +141,21 @@ black_shade=adjustcolor('black',.4)
 loc_nonhost=1.2; loc_host=1.8
 
 # pdf('figures/paired_analysis_boxplot_11june2022.pdf')
+# CairoPDF(file = 'figures/paired_analysis_boxplot_11june2022-cairo.pdf')
+tiff('figures/paired_analysis_boxplot_21mar2023.tiff', units="in", width=6, height=6, res=500, compression = 'lzw')
+# tiff('paired_analysis_boxplot_11june2022.tiff')
 
 par(mfrow=c(1,1),mar=c(4.5,5.5,3,2),cex.lab=1.3,cex.axis=1,cex=1.5)
 with(paired_df,
      stripchart(abund_log10~(category),
-                ylab=expression('log'[10]*'(effort-corrected abundance)'),
+                ylab=expression('log'[10]*'(plant abundance index)'),
                 xlab='plant type',
                 group.names=c('nonhost','host'),
                 vertical=T,pch=16,col=unique(color_vec2),cex=.5,at=c(loc_nonhost,loc_host)))
 for(i in 1:nrow(pairs_wide)){segments(loc_nonhost, pairs_wide$nonhost[i], loc_host, pairs_wide$specialist_host[i],lty=2,col=black_shade)}
 with(paired_df,boxplot(abund_log10~category,boxwex=c(.35,.35),
                        xaxt = "n" ,xlab='Plant type',pch=1,col=unique(color_vec),alpha=.1,at=c(loc_nonhost,loc_host),add=T))
-# dev.off()
+dev.off()
  
 
 #summary of new_df
@@ -277,6 +297,7 @@ my_cols=RColorBrewer::brewer.pal(8,"Accent")
 
 
 # pdf('figures/new_abund_plot_13april2022.pdf')
+tiff('figures/new_abund_plot_13april2022.tiff', units="in", width=6, height=6, res=500, compression = 'lzw')
 ggplot() +
     geom_segment(data=hist_df[hist_df$category_binary==1,], size=4, show.legend=FALSE,colour=my_cols[1],
                  aes(x=abund_scaled, xend=abund_scaled, y=category_binary, yend=pct)) +
@@ -295,9 +316,9 @@ ggplot() +
         axis.line = element_line(colour = "black"),
         text = element_text(size=20)
     )+
-    labs(x='abundance (corrected for effort and scaled)',y='probability of hosting a specialist bee')
+    labs(x='plant abundance index (scaled)',y='probability of hosting a specialist bee')
 
-# dev.off()
+ dev.off()
 
  
 
